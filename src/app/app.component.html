@@ -1,0 +1,1625 @@
+<div class="santa-shell">
+  <!-- Top Header & Occasion Navigation Bar -->
+  <header class="santa-topbar">
+    <div class="brand-cluster">
+      <div class="brand-logo" aria-hidden="true">
+        <mat-icon>redeem</mat-icon>
+      </div>
+      <div>
+        <h1 class="brand-title display-font">Everyday Santa</h1>
+        <p class="brand-subtitle">
+          Google Contacts Bidirectional Note Sync &bull; AI + UCP Catalog Discovery
+        </p>
+      </div>
+    </div>
+
+    <!-- Occasion Switcher Pills (Birthday, Christmas, Mother's Day, Father's Day, Anniversary) -->
+    <nav class="occasion-switcher" aria-label="Gift occasions">
+      @for (occ of occasions(); track occ.id) {
+        <button
+          type="button"
+          class="occasion-pill"
+          [id]="'occasion-pill-' + occ.id"
+          [class.active]="activeOccasionId() === occ.id"
+          (click)="selectOccasion(occ.id)"
+        >
+          <mat-icon class="occ-icon">{{ occ.icon }}</mat-icon>
+          <span class="occ-label">{{ occ.shortLabel }}</span>
+          @if (occ.id !== 'birthday') {
+            <span class="occ-countdown">{{ occ.daysUntil }}d</span>
+          }
+        </button>
+      }
+    </nav>
+
+    <!-- Global Toolbar Actions -->
+    <div class="toolbar-actions">
+      @if (contactsService.dirtyContactsCount() > 0) {
+        <button
+          type="button"
+          id="btn-sync-all-dirty"
+          class="action-btn sync-dirty-btn"
+          (click)="syncAllDirtyNotes()"
+          matTooltip="Push all local note changes to Google Contacts (people.updateContact)"
+        >
+          <mat-icon>sync_problem</mat-icon>
+          <span>Sync Notes ({{ contactsService.dirtyContactsCount() }})</span>
+        </button>
+      }
+
+      <button
+        type="button"
+        id="btn-open-contacts-picker"
+        class="action-btn secondary-btn"
+        (click)="showContactsPickerModal.set(true)"
+        matTooltip="Load & select which Google Contacts are in your Gift Circle"
+      >
+        <mat-icon>contacts</mat-icon>
+        <span>Select Contacts ({{ contactsService.selectedContacts().length }}/{{ contactsService.contacts().length }})</span>
+      </button>
+
+      <button
+        type="button"
+        id="btn-open-saved-shortlist"
+        class="action-btn secondary-btn"
+        (click)="showSavedShortlistModal.set(true)"
+        matTooltip="View saved gift shortlist across all contacts"
+      >
+        <mat-icon>bookmark</mat-icon>
+        <span>Shortlist ({{ aiEngine.savedGifts().length }})</span>
+      </button>
+
+      <button
+        type="button"
+        id="btn-open-ucp-inspector"
+        class="action-btn ucp-btn"
+        (click)="openUcpSearchInspector()"
+        matTooltip="Inspect Universal Commerce Protocol (UCP) /.well-known/ucp & catalog search payloads"
+      >
+        <mat-icon>hub</mat-icon>
+        <span>UCP Protocol</span>
+      </button>
+
+      <button
+        type="button"
+        id="btn-open-oauth-settings"
+        class="action-btn secondary-btn"
+        (click)="showOAuthModal.set(true)"
+        matTooltip="Configure Google People API OAuth 2.0 & Gemini API Key"
+      >
+        <mat-icon>key</mat-icon>
+        <span>
+          @if (contactsService.accounts().length > 0) {
+            Connected ({{ contactsService.accounts().length }})
+          } @else {
+            Google OAuth & AI
+          }
+        </span>
+      </button>
+
+      <button
+        type="button"
+        id="btn-reset-demo-data"
+        class="icon-only-btn"
+        (click)="contactsService.resetDemoContacts()"
+        matTooltip="Reset Demo Contacts & Notes"
+        aria-label="Reset Demo Contacts"
+      >
+        <mat-icon>restart_alt</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <!-- Status Toast Banner -->
+  @if (contactsService.lastSyncMessage() || contactsService.syncError() || aiEngine.aiStatusMessage()) {
+    <div
+      class="status-banner"
+      [class.error-banner]="!!contactsService.syncError()"
+    >
+      <div class="status-banner-text">
+        <mat-icon>
+          {{ contactsService.syncError() ? 'error_outline' : 'check_circle' }}
+        </mat-icon>
+        <span>
+          {{
+            contactsService.syncError() ||
+              aiEngine.aiStatusMessage() ||
+              contactsService.lastSyncMessage()
+          }}
+        </span>
+      </div>
+      <button
+        type="button"
+        class="banner-dismiss-btn"
+        (click)="
+          contactsService.lastSyncMessage.set(null);
+          contactsService.syncError.set(null);
+          aiEngine.aiStatusMessage.set(null)
+        "
+      >
+        Dismiss
+      </button>
+    </div>
+  }
+
+  <!-- Main 2-Column Workspace Layout -->
+  <div class="workspace-grid">
+    <!-- Left Sidebar: Selected Contacts Roster & Upcoming Occasion Radar -->
+    <aside class="contacts-sidebar" aria-label="Selected Gift Circle Contacts">
+      <div class="sidebar-section-header">
+        <div>
+          <h2 class="sidebar-heading">Gift Circle Roster</h2>
+          <p class="sidebar-caption">
+            Select a person to sync notes &amp; discover gifts
+          </p>
+        </div>
+        <button
+          type="button"
+          id="btn-add-custom-person"
+          class="mini-action-btn"
+          (click)="showAddContactModal.set(true)"
+          matTooltip="Add a new person to your Gift Circle"
+        >
+          <mat-icon>person_add</mat-icon>
+          <span>New</span>
+        </button>
+      </div>
+
+      <!-- Contact Search Box -->
+      <div class="sidebar-search">
+        <mat-icon>search</mat-icon>
+        <input
+          type="text"
+          id="input-sidebar-contact-search"
+          placeholder="Search people, relationships, or likes..."
+          [ngModel]="contactSearchQuery()"
+          (ngModelChange)="contactSearchQuery.set($event)"
+        />
+      </div>
+
+      <!-- Selected Contacts List -->
+      <div class="contact-roster-list">
+        @for (person of sidebarContacts(); track person.resourceName) {
+          <button
+            type="button"
+            class="contact-card-item"
+            [id]="'contact-item-' + person.resourceName"
+            [class.selected]="activeContact()?.resourceName === person.resourceName"
+            (click)="selectContact(person.resourceName)"
+          >
+            <div
+              class="contact-avatar"
+              [style.backgroundColor]="person.avatarColor"
+            >
+              {{ person.initials }}
+            </div>
+            <div class="contact-card-body">
+              <div class="contact-card-top">
+                <span class="contact-name">{{ person.displayName }}</span>
+                <span class="relationship-chip">{{ person.giftProfile.relationship }}</span>
+              </div>
+              <div class="contact-card-meta">
+                <span class="bday-chip">
+                  <mat-icon>cake</mat-icon>
+                  {{ formatBirthdayBadge(person) }}
+                </span>
+                <span
+                  class="sync-dot"
+                  [class.dirty]="person.syncStatus === 'dirty'"
+                  [class.synced]="person.syncStatus === 'synced'"
+                  [matTooltip]="
+                    person.syncStatus === 'dirty'
+                      ? 'Unsynced local note edits'
+                      : 'Notes synced'
+                  "
+                ></span>
+              </div>
+              @if (person.giftProfile.likes.length > 0) {
+                <div class="contact-mini-likes">
+                  {{ person.giftProfile.likes.slice(0, 2).join(' • ') }}
+                </div>
+              }
+            </div>
+          </button>
+        } @empty {
+          <div class="empty-roster">
+            <p>No matching contacts in your Gift Circle.</p>
+            <button
+              type="button"
+              class="action-btn secondary-btn"
+              (click)="showContactsPickerModal.set(true)"
+            >
+              Select from Google Contacts
+            </button>
+          </div>
+        }
+      </div>
+
+      <!-- Chronological Upcoming Occasion Radar -->
+      <div class="upcoming-radar-card">
+        <div class="radar-header">
+          <mat-icon>event_upcoming</mat-icon>
+          <span>Upcoming Birthdays &amp; Holidays</span>
+        </div>
+        <div class="radar-list">
+          @for (ev of upcomingTimeline(); track ev.contact.resourceName + ev.occasionId) {
+            <button
+              type="button"
+              class="radar-item"
+              (click)="selectTimelineEvent(ev.contact.resourceName, ev.occasionId)"
+            >
+              <mat-icon [style.color]="ev.accentColor">{{ ev.icon }}</mat-icon>
+              <div class="radar-item-info">
+                <span class="radar-title">{{ ev.occasionLabel }}</span>
+                <span class="radar-sub">
+                  {{ ev.dateLabel }}
+                  @if (ev.turningAge) {
+                    &bull; Turning {{ ev.turningAge }}
+                  }
+                </span>
+              </div>
+              <span class="radar-days-badge">
+                {{ ev.daysUntil === 0 ? 'Today' : ev.daysUntil + 'd' }}
+              </span>
+            </button>
+          }
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Viewport -->
+    <main class="santa-main-viewport">
+      @if (activeContact(); as person) {
+        <!-- Section 1: Active Person Header + Bidirectional Google Contacts Note Studio -->
+        <section class="person-notes-studio" aria-label="Contact Notes and Bidirectional Sync">
+          <div class="person-studio-header">
+            <div class="person-identity">
+              <div
+                class="person-avatar-lg"
+                [style.backgroundColor]="person.avatarColor"
+              >
+                {{ person.initials }}
+              </div>
+              <div>
+                <div class="person-title-row">
+                  <h2 class="person-name display-font">{{ person.displayName }}</h2>
+                  <select
+                    id="select-person-relationship"
+                    class="relationship-select"
+                    aria-label="Contact relationship"
+                    [ngModel]="person.giftProfile.relationship"
+                    (ngModelChange)="onRelationshipChange($event)"
+                  >
+                    @for (rel of relationships; track rel) {
+                      <option [value]="rel">{{ rel }}</option>
+                    }
+                  </select>
+
+                  @if (activeContactBirthdayInfo(); as bday) {
+                    <span class="person-bday-pill">
+                      <mat-icon>cake</mat-icon>
+                      Birthday: {{ bday.nextDateLabel }}
+                      (in {{ bday.daysUntil }} days{{ bday.turningAge ? ', turning ' + bday.turningAge : '' }})
+                    </span>
+                  }
+                </div>
+                <p class="person-resource-sub mono">
+                  Google People API: {{ person.resourceName }} &bull; ETag: {{ person.etag }}
+                  &bull;
+                  <span
+                    class="sync-status-label"
+                    [class.is-dirty]="person.syncStatus === 'dirty'"
+                  >
+                    @switch (person.syncStatus) {
+                      @case ('dirty') {
+                        ● Unsynced Note Edits (Ready to Push)
+                      }
+                      @case ('syncing') {
+                        ↻ Syncing with Google Contacts...
+                      }
+                      @case ('synced') {
+                        ✓ Synced with Google Contacts
+                      }
+                      @default {
+                        ✓ Bidirectional Note Structure Ready
+                      }
+                    }
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Bidirectional Sync Buttons -->
+            <div class="studio-sync-controls">
+              <div class="mode-toggle-group" role="group" aria-label="Note editor view mode">
+                <button
+                  type="button"
+                  id="btn-mode-structured"
+                  class="mode-btn"
+                  [class.active]="noteEditorMode() === 'structured'"
+                  (click)="noteEditorMode.set('structured')"
+                >
+                  Structured Context
+                </button>
+                <button
+                  type="button"
+                  id="btn-mode-raw-bio"
+                  class="mode-btn"
+                  [class.active]="noteEditorMode() === 'raw_google_note'"
+                  (click)="noteEditorMode.set('raw_google_note')"
+                >
+                  Raw Google Note (biographies)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                id="btn-pull-contact-notes"
+                class="action-btn secondary-btn"
+                (click)="pullActiveContactNotes()"
+                matTooltip="Pull latest biography/notes from Google Contacts (GET /v1/{resourceName})"
+              >
+                <mat-icon>cloud_download</mat-icon>
+                <span>Pull Note</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-push-contact-notes"
+                class="action-btn primary-sync-btn"
+                (click)="pushActiveContactNotes()"
+                matTooltip="Push updated notes back to Google Contacts (PATCH /v1/{resourceName}:updateContact)"
+              >
+                <mat-icon>cloud_upload</mat-icon>
+                <span>
+                  {{
+                    person.syncStatus === 'dirty'
+                      ? 'Sync Note to Google Contacts *'
+                      : 'Push to Google Contacts'
+                  }}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-toggle-notes-panel"
+                class="icon-only-btn"
+                (click)="notesPanelExpanded.set(!notesPanelExpanded())"
+                [attr.aria-label]="notesPanelExpanded() ? 'Collapse notes studio' : 'Expand notes studio'"
+              >
+                <mat-icon>{{ notesPanelExpanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          @if (notesPanelExpanded()) {
+            @if (noteEditorMode() === 'structured') {
+              <div class="structured-notes-grid">
+                <!-- Left Column: Freeform Google Contact Notes + Sizes/Budget -->
+                <div class="notes-col">
+                  <label class="field-label" for="textarea-freeform-notes">
+                    <mat-icon>sticky_note_2</mat-icon>
+                    <span>Personal Notes &amp; Gift Clues (Bidirectionally synced with Google Contacts)</span>
+                  </label>
+                  <textarea
+                    id="textarea-freeform-notes"
+                    class="notes-textarea"
+                    rows="3"
+                    placeholder="Write anything this person mentioned wanting, hobbies, aesthetics, or favorite authors..."
+                    [ngModel]="person.giftProfile.freeformNotes"
+                    (ngModelChange)="onFreeformNotesChange($event)"
+                  ></textarea>
+
+                  <div class="inline-meta-inputs">
+                    <div class="meta-input-group">
+                      <label for="input-contact-sizes">Sizes (Apparel / Shoe / Ring)</label>
+                      <input
+                        id="input-contact-sizes"
+                        type="text"
+                        placeholder="e.g. Sweater M, Shoe 8.5"
+                        [ngModel]="person.giftProfile.sizes"
+                        (ngModelChange)="onSizesChange($event)"
+                      />
+                    </div>
+                    <div class="meta-input-group budget-group">
+                      <label>Target Budget ($ USD)</label>
+                      <div class="budget-pair">
+                        <input
+                          id="input-budget-min"
+                          type="number"
+                          aria-label="Minimum budget"
+                          [ngModel]="person.giftProfile.targetBudget.min"
+                          (ngModelChange)="onBudgetChange($event, person.giftProfile.targetBudget.max)"
+                        />
+                        <span>to</span>
+                        <input
+                          id="input-budget-max"
+                          type="number"
+                          aria-label="Maximum budget"
+                          [ngModel]="person.giftProfile.targetBudget.max"
+                          (ngModelChange)="onBudgetChange(person.giftProfile.targetBudget.min, $event)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right Column: Likes, Dislikes & Favorite UCP Brands -->
+                <div class="tags-col">
+                  <!-- Likes & Interests -->
+                  <div class="tag-editor-box">
+                    <div class="tag-box-header">
+                      <span class="tag-box-title positive">
+                        <mat-icon>thumb_up</mat-icon>
+                        Likes &amp; Interests (Drives AI + UCP Search Query)
+                      </span>
+                    </div>
+                    <div class="chip-list">
+                      @for (like of person.giftProfile.likes; track like) {
+                        <span class="context-chip like-chip">
+                          {{ like }}
+                          <button
+                            type="button"
+                            class="chip-remove"
+                            [attr.aria-label]="'Remove like ' + like"
+                            (click)="removeLikeTag(like)"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      }
+                      <div class="add-chip-inline">
+                        <input
+                          id="input-add-like"
+                          type="text"
+                          placeholder="+ Add interest (Enter)"
+                          [ngModel]="newLikeInput()"
+                          (ngModelChange)="newLikeInput.set($event)"
+                          (keyup.enter)="addLikeTag()"
+                        />
+                        <button
+                          type="button"
+                          id="btn-add-like"
+                          (click)="addLikeTag()"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Dislikes & Guardrails -->
+                  <div class="tag-editor-box">
+                    <div class="tag-box-header">
+                      <span class="tag-box-title negative">
+                        <mat-icon>block</mat-icon>
+                        Dislikes / Avoid (Filtered Out by AI Engine)
+                      </span>
+                    </div>
+                    <div class="chip-list">
+                      @for (dislike of person.giftProfile.dislikes; track dislike) {
+                        <span class="context-chip dislike-chip">
+                          {{ dislike }}
+                          <button
+                            type="button"
+                            class="chip-remove"
+                            [attr.aria-label]="'Remove dislike ' + dislike"
+                            (click)="removeDislikeTag(dislike)"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      }
+                      <div class="add-chip-inline">
+                        <input
+                          id="input-add-dislike"
+                          type="text"
+                          placeholder="+ Add dislike / allergy"
+                          [ngModel]="newDislikeInput()"
+                          (ngModelChange)="newDislikeInput.set($event)"
+                          (keyup.enter)="addDislikeTag()"
+                        />
+                        <button
+                          type="button"
+                          id="btn-add-dislike"
+                          (click)="addDislikeTag()"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Favorite Brands -->
+                  <div class="tag-editor-box">
+                    <div class="tag-box-header">
+                      <span class="tag-box-title neutral">
+                        <mat-icon>verified</mat-icon>
+                        Preferred Brands &amp; UCP Retailers
+                      </span>
+                    </div>
+                    <div class="chip-list">
+                      @for (brand of person.giftProfile.favoriteBrands; track brand) {
+                        <span class="context-chip brand-chip">
+                          {{ brand }}
+                          <button
+                            type="button"
+                            class="chip-remove"
+                            [attr.aria-label]="'Remove brand ' + brand"
+                            (click)="removeBrandTag(brand)"
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      }
+                      <div class="add-chip-inline">
+                        <input
+                          id="input-add-brand"
+                          type="text"
+                          placeholder="+ Add brand"
+                          [ngModel]="newBrandInput()"
+                          (ngModelChange)="newBrandInput.set($event)"
+                          (keyup.enter)="addBrandTag()"
+                        />
+                        <button
+                          type="button"
+                          id="btn-add-brand"
+                          (click)="addBrandTag()"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            } @else {
+              <!-- Raw Google Contacts Note Editor (biographies[0].value) -->
+              <div class="raw-note-editor-container">
+                <div class="raw-note-explanation">
+                  <mat-icon>sync_alt</mat-icon>
+                  <span>
+                    This is the exact plain-text payload stored in Google Contacts'
+                    <code class="mono">biographies[0].value</code> field. Editing the
+                    <code class="mono">[Everyday Santa]</code> block here or on your phone in Google Contacts
+                    automatically updates the structured tags above!
+                  </span>
+                </div>
+                <textarea
+                  id="textarea-raw-google-biography"
+                  class="raw-bio-textarea mono"
+                  rows="9"
+                  [ngModel]="person.rawBiography"
+                  (ngModelChange)="onRawBiographyChange($event)"
+                ></textarea>
+              </div>
+            }
+          }
+        </section>
+
+        <!-- Section 2: Secondary Product Filters Bar (Maps to UCP SearchFilters) -->
+        <section class="secondary-filters-bar" aria-label="Secondary Product Filters">
+          <div class="filters-top-row">
+            <div class="filters-title-group">
+              <mat-icon>tune</mat-icon>
+              <span class="filters-heading">Secondary Product Filters</span>
+              <span class="ucp-schema-badge mono">
+                UCP SearchFilters (dev.ucp.shopping.catalog.search)
+              </span>
+              @if (activeFilterCount() > 0) {
+                <button
+                  type="button"
+                  id="btn-clear-all-filters"
+                  class="clear-filters-link"
+                  (click)="resetSecondaryFilters()"
+                >
+                  Clear all ({{ activeFilterCount() }})
+                </button>
+              }
+            </div>
+
+            <!-- Search within recommendations + Sort By -->
+            <div class="filters-right-controls">
+              <div class="keyword-filter-input">
+                <mat-icon>filter_alt</mat-icon>
+                <input
+                  id="input-product-keyword-filter"
+                  type="text"
+                  placeholder="Filter products, materials, brands..."
+                  [ngModel]="filterState().searchKeyword"
+                  (ngModelChange)="setSearchKeyword($event)"
+                />
+              </div>
+
+              <select
+                id="select-product-merchant"
+                class="filter-select"
+                aria-label="Filter by UCP Merchant"
+                [ngModel]="filterState().merchantId"
+                (ngModelChange)="setMerchantFilter($event)"
+              >
+                <option value="all">All UCP Merchants ({{ ucpCatalog.merchants().length }})</option>
+                @for (m of ucpCatalog.merchants(); track m.merchantId) {
+                  <option [value]="m.merchantId">{{ m.merchantName }} ({{ m.domain }})</option>
+                }
+              </select>
+
+              <select
+                id="select-product-sort"
+                class="filter-select"
+                aria-label="Sort gift recommendations"
+                [ngModel]="filterState().sortBy"
+                (ngModelChange)="setSortBy($event)"
+              >
+                <option value="best_match">Sort: AI Match Score</option>
+                <option value="price_asc">Sort: Price (Low → High)</option>
+                <option value="price_desc">Sort: Price (High → Low)</option>
+                <option value="fastest_delivery">Sort: Fastest Delivery</option>
+                <option value="highest_rated">Sort: Highest Rated</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Category Filter Chips (UCP SearchFilters.categories) -->
+          <div class="category-chips-row" role="group" aria-label="Product category filters">
+            <button
+              type="button"
+              id="cat-chip-all"
+              class="filter-chip"
+              [class.selected]="filterState().categories.length === 0"
+              (click)="clearCategoryFilters()"
+            >
+              All Categories
+            </button>
+            @for (cat of allCategories; track cat) {
+              <button
+                type="button"
+                class="filter-chip"
+                [id]="'cat-chip-' + cat"
+                [class.selected]="filterState().categories.includes(cat)"
+                (click)="toggleCategoryFilter(cat)"
+              >
+                {{ cat }}
+              </button>
+            }
+          </div>
+
+          <!-- Price Range & Fulfillment Secondary Facets -->
+          <div class="secondary-facets-row">
+            <div class="price-presets-group" role="group" aria-label="Price range filter">
+              <span class="facet-group-label">Price:</span>
+              <button
+                type="button"
+                id="price-preset-all"
+                class="facet-pill"
+                [class.active]="filterState().pricePreset === 'all'"
+                (click)="setPricePreset('all')"
+              >
+                Any
+              </button>
+              <button
+                type="button"
+                id="price-preset-under-35"
+                class="facet-pill"
+                [class.active]="filterState().pricePreset === 'under_35'"
+                (click)="setPricePreset('under_35')"
+              >
+                Under $35
+              </button>
+              <button
+                type="button"
+                id="price-preset-35-75"
+                class="facet-pill"
+                [class.active]="filterState().pricePreset === '35_to_75'"
+                (click)="setPricePreset('35_to_75')"
+              >
+                $35–$75
+              </button>
+              <button
+                type="button"
+                id="price-preset-75-150"
+                class="facet-pill"
+                [class.active]="filterState().pricePreset === '75_to_150'"
+                (click)="setPricePreset('75_to_150')"
+              >
+                $75–$150
+              </button>
+              <button
+                type="button"
+                id="price-preset-over-150"
+                class="facet-pill"
+                [class.active]="filterState().pricePreset === 'over_150'"
+                (click)="setPricePreset('over_150')"
+              >
+                $150+
+              </button>
+            </div>
+
+            <div class="attribute-toggles-group" role="group" aria-label="Shipping and UCP capability filters">
+              <button
+                type="button"
+                id="toggle-free-shipping"
+                class="facet-toggle"
+                [class.active]="filterState().freeShippingOnly"
+                (click)="toggleBooleanFilter('freeShippingOnly')"
+              >
+                <mat-icon>local_shipping</mat-icon>
+                <span>Free Shipping</span>
+              </button>
+
+              <button
+                type="button"
+                id="toggle-fast-delivery"
+                class="facet-toggle"
+                [class.active]="filterState().fastDeliveryOnly"
+                (click)="toggleBooleanFilter('fastDeliveryOnly')"
+              >
+                <mat-icon>bolt</mat-icon>
+                <span>Arrives &le; 3 Days</span>
+              </button>
+
+              <button
+                type="button"
+                id="toggle-free-returns"
+                class="facet-toggle"
+                [class.active]="filterState().freeReturnsOnly"
+                (click)="toggleBooleanFilter('freeReturnsOnly')"
+              >
+                <mat-icon>assignment_return</mat-icon>
+                <span>Free Returns</span>
+              </button>
+
+              <button
+                type="button"
+                id="toggle-one-click-ucp"
+                class="facet-toggle ucp-toggle"
+                [class.active]="filterState().oneClickUcpOnly"
+                (click)="toggleBooleanFilter('oneClickUcpOnly')"
+              >
+                <mat-icon>shopping_cart_checkout</mat-icon>
+                <span>1-Click UCP Checkout</span>
+              </button>
+
+              <button
+                type="button"
+                id="toggle-rating-49"
+                class="facet-toggle"
+                [class.active]="filterState().minRating === 4.9"
+                (click)="setMinRatingFilter(filterState().minRating === 4.9 ? 0 : 4.9)"
+              >
+                <mat-icon>star</mat-icon>
+                <span>4.9&starf; Only</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3: Active UCP Query Banner + AI Brainstorm Drawer -->
+        <section class="ucp-query-banner" aria-label="Active UCP Discovery Query">
+          <div class="ucp-query-left">
+            <span class="occasion-active-badge" [style.backgroundColor]="activeOccasionMeta().badgeBg" [style.color]="activeOccasionMeta().accentColor">
+              <mat-icon>{{ activeOccasionMeta().icon }}</mat-icon>
+              {{ activeOccasionMeta().label }}
+            </span>
+            <div class="ucp-query-text">
+              <span class="query-label">Active UCP Catalog Search Query:</span>
+              <code class="mono">{{ activeDiscoveryResult().request.query }}</code>
+            </div>
+          </div>
+          <div class="ucp-query-actions">
+            <button
+              type="button"
+              id="btn-trigger-ai-brainstorm"
+              class="action-btn ai-brainstorm-btn"
+              (click)="triggerAiBrainstorm()"
+              [disabled]="aiEngine.isGeneratingGemini()"
+            >
+              <mat-icon>auto_awesome</mat-icon>
+              <span>
+                {{
+                  aiEngine.isGeneratingGemini()
+                    ? 'Synthesizing Ideas...'
+                    : 'AI Gift Brainstorm'
+                }}
+              </span>
+            </button>
+            <button
+              type="button"
+              id="btn-inspect-active-ucp-query"
+              class="action-btn secondary-btn"
+              (click)="openUcpSearchInspector()"
+            >
+              <mat-icon>code</mat-icon>
+              <span>Inspect UCP JSON ({{ activeRecommendations().length }} results)</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Optional AI Brainstorm Concept Cards -->
+        @if (activeBrainstormIdeas().length > 0) {
+          <section class="brainstorm-strip" aria-label="AI Generated Gift Concepts">
+            <div class="brainstorm-header">
+              <span class="brainstorm-title">
+                <mat-icon>psychology</mat-icon>
+                AI-Synthesized Gift Concepts for {{ person.displayName }} ({{ activeOccasionMeta().shortLabel }})
+              </span>
+              <span class="brainstorm-caption">Click any concept to filter UCP catalog results</span>
+            </div>
+            <div class="brainstorm-cards">
+              @for (idea of activeBrainstormIdeas(); track idea.title) {
+                <div class="brainstorm-card" (click)="applyBrainstormQuery(idea)">
+                  <div class="brainstorm-card-top">
+                    <span class="brainstorm-cat">{{ idea.category }}</span>
+                    <span class="brainstorm-price">{{ idea.estimatedPrice }}</span>
+                  </div>
+                  <h4>{{ idea.title }}</h4>
+                  <p>{{ idea.whyItFits }}</p>
+                  <span class="brainstorm-query mono">UCP Query: "{{ idea.ucpSearchQuery }}"</span>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- Section 4: Personalized UCP Gift Recommendations Grid -->
+        <section class="recommendations-grid" aria-label="Gift Recommendations">
+          @for (rec of activeRecommendations(); track rec.product.productId) {
+            <article
+              class="gift-card"
+              [id]="'gift-card-' + rec.product.productId"
+            >
+              <!-- Visual Header with Match Score & Merchant Well-Known Badge -->
+              <div
+                class="gift-card-visual"
+                [style.background]="rec.product.gradientBg"
+              >
+                <div class="visual-top-badges">
+                  <span class="ai-match-badge">
+                    <mat-icon>auto_awesome</mat-icon>
+                    {{ rec.matchScore }}% AI Match
+                  </span>
+                  <span class="occasion-fit-chip">
+                    {{ rec.occasionFitLabel }}
+                  </span>
+                </div>
+
+                <div class="visual-emoji" aria-hidden="true">
+                  {{ rec.product.visualEmoji }}
+                </div>
+
+                <div class="visual-bottom-row">
+                  <button
+                    type="button"
+                    class="merchant-wellknown-pill"
+                    (click)="openUcpWellKnownInspector(rec.product.merchant)"
+                    matTooltip="Inspect Merchant /.well-known/ucp Discovery Profile"
+                  >
+                    <mat-icon>{{ rec.product.merchant.logoIcon }}</mat-icon>
+                    <span>{{ rec.product.merchant.merchantName }}</span>
+                    <code class="mono">/.well-known/ucp</code>
+                  </button>
+
+                  <span class="category-tag">{{ rec.product.category }}</span>
+                </div>
+              </div>
+
+              <!-- Card Content -->
+              <div class="gift-card-body">
+                <div class="price-rating-row">
+                  <div class="price-block">
+                    <span class="current-price">{{ rec.product.offer.formattedPrice }}</span>
+                    @if (rec.product.offer.formattedOriginalPrice) {
+                      <span class="original-price">{{ rec.product.offer.formattedOriginalPrice }}</span>
+                    }
+                  </div>
+                  <div class="rating-block">
+                    <span class="star-icon">&starf;</span>
+                    <span class="rating-val">{{ rec.product.rating }}</span>
+                    <span class="review-count">({{ rec.product.reviewCount }})</span>
+                  </div>
+                </div>
+
+                <h3 class="product-title">{{ rec.product.offer.title }}</h3>
+                <p class="product-desc">{{ rec.product.offer.description }}</p>
+
+                <!-- AI Personalization Rationale Box -->
+                <div class="ai-rationale-box">
+                  <div class="rationale-header">
+                    <mat-icon>tips_and_updates</mat-icon>
+                    <span>Why Santa Picked This for {{ person.givenName }}</span>
+                  </div>
+                  <p class="rationale-text">{{ rec.aiRationale }}</p>
+                  @if (rec.matchedSignals.length > 0) {
+                    <div class="matched-signals-row">
+                      @for (sig of rec.matchedSignals; track sig) {
+                        <span class="signal-pill">{{ sig }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- UCP Offer Fulfillment & Return Attributes -->
+                <div class="ucp-fulfillment-strip">
+                  <span class="fulfill-item">
+                    <mat-icon>local_shipping</mat-icon>
+                    {{
+                      rec.product.offer.shippingAndReturnInfo.isFreeShipping
+                        ? 'Free Shipping'
+                        : '$7 Shipping'
+                    }}
+                    ({{ rec.product.offer.shippingAndReturnInfo.minDeliveryBusinessDays }}–{{
+                      rec.product.offer.shippingAndReturnInfo.maxDeliveryBusinessDays
+                    }}d)
+                  </span>
+                  @if (rec.product.offer.shippingAndReturnInfo.freeReturn) {
+                    <span class="fulfill-item">
+                      <mat-icon>verified_user</mat-icon>
+                      Free {{ rec.product.offer.shippingAndReturnInfo.returnWindowDays }}d Returns
+                    </span>
+                  }
+                  @if (rec.product.sustainabilityBadge) {
+                    <span class="fulfill-item eco-badge">
+                      <mat-icon>eco</mat-icon>
+                      {{ rec.product.sustainabilityBadge }}
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <!-- Card Footer Actions -->
+              <footer class="gift-card-footer">
+                <button
+                  type="button"
+                  class="save-gift-btn"
+                  [id]="'btn-save-' + rec.product.productId"
+                  [class.is-saved]="rec.savedByUser"
+                  (click)="toggleSaveRecommendation(rec.product)"
+                >
+                  <mat-icon>{{ rec.savedByUser ? 'bookmark' : 'bookmark_border' }}</mat-icon>
+                  <span>{{ rec.savedByUser ? 'Saved' : 'Save Idea' }}</span>
+                </button>
+
+                @if (rec.product.offer.isOneClickBuyAvailable) {
+                  <button
+                    type="button"
+                    class="ucp-checkout-btn"
+                    [id]="'btn-ucp-checkout-' + rec.product.productId"
+                    (click)="openUcpCheckoutModal(rec.product)"
+                  >
+                    <mat-icon>shopping_cart_checkout</mat-icon>
+                    <span>UCP 1-Click Checkout</span>
+                  </button>
+                } @else {
+                  <a
+                    class="merchant-link-btn"
+                    [href]="rec.product.offer.offerUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <mat-icon>open_in_new</mat-icon>
+                    <span>View on {{ rec.product.merchant.merchantName }}</span>
+                  </a>
+                }
+              </footer>
+            </article>
+          } @empty {
+            <div class="empty-recommendations">
+              <mat-icon>search_off</mat-icon>
+              <h3>No UCP Catalog Products Match All Active Filters</h3>
+              <p>
+                Try relaxing your secondary product filters (price range, delivery speed, or category)
+                or add more interests to {{ person.givenName }}'s contact notes above.
+              </p>
+              <button
+                type="button"
+                id="btn-reset-filters-empty"
+                class="action-btn primary-sync-btn"
+                (click)="resetSecondaryFilters()"
+              >
+                Reset Secondary Product Filters
+              </button>
+            </div>
+          }
+        </section>
+      }
+    </main>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: Select & Import People from Google Contacts                  -->
+  <!-- ===================================================================== -->
+  @if (showContactsPickerModal()) {
+    <div class="modal-backdrop" (click)="showContactsPickerModal.set(false)">
+      <div
+        class="modal-dialog contacts-picker-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-labelledby="modal-contacts-picker-title"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 id="modal-contacts-picker-title" class="display-font">
+              Select People from Google Contacts
+            </h2>
+            <p class="modal-subtitle">
+              Choose which contacts belong to your active Gift Circle, or sync fresh birthdays &amp; biographies from
+              <code class="mono">people.googleapis.com/v1/people/me/connections</code>.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="icon-only-btn"
+            (click)="showContactsPickerModal.set(false)"
+            aria-label="Close contacts picker"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+
+        <div class="modal-toolbar">
+          <div class="picker-filter-pills">
+            <button
+              type="button"
+              class="facet-pill"
+              [class.active]="contactsPickerFilter() === 'all'"
+              (click)="contactsPickerFilter.set('all')"
+            >
+              All Contacts ({{ contactsService.contacts().length }})
+            </button>
+            <button
+              type="button"
+              class="facet-pill"
+              [class.active]="contactsPickerFilter() === 'has_birthday'"
+              (click)="contactsPickerFilter.set('has_birthday')"
+            >
+              Has Birthday
+            </button>
+            <button
+              type="button"
+              class="facet-pill"
+              [class.active]="contactsPickerFilter() === 'has_notes'"
+              (click)="contactsPickerFilter.set('has_notes')"
+            >
+              Has Notes
+            </button>
+          </div>
+
+          <input
+            type="text"
+            class="modal-search-input"
+            placeholder="Search contacts by name, email, or notes..."
+            [ngModel]="contactsPickerSearch()"
+            (ngModelChange)="contactsPickerSearch.set($event)"
+          />
+
+          <button
+            type="button"
+            id="btn-sync-from-google-people-api"
+            class="action-btn primary-sync-btn"
+            (click)="contactsService.syncContactsFromGoogle()"
+            [disabled]="contactsService.isSyncing()"
+          >
+            <mat-icon>sync</mat-icon>
+            <span>{{ contactsService.isSyncing() ? 'Syncing...' : 'Pull from Google Contacts' }}</span>
+          </button>
+        </div>
+
+        <div class="modal-body picker-list">
+          @for (c of pickerFilteredContacts(); track c.resourceName) {
+            <div class="picker-contact-row">
+              <label class="picker-checkbox-label">
+                <input
+                  type="checkbox"
+                  [checked]="c.selectedForSanta"
+                  (change)="contactsService.toggleContactSelection(c.resourceName)"
+                />
+                <span
+                  class="contact-avatar"
+                  [style.backgroundColor]="c.avatarColor"
+                >
+                  {{ c.initials }}
+                </span>
+                <div class="picker-contact-details">
+                  <div class="picker-row-top">
+                    <strong>{{ c.displayName }}</strong>
+                    <span class="relationship-chip">{{ c.giftProfile.relationship }}</span>
+                    <span class="bday-chip">
+                      <mat-icon>cake</mat-icon>
+                      {{ formatBirthdayBadge(c) }}
+                    </span>
+                  </div>
+                  <p class="picker-note-preview">
+                    {{ c.giftProfile.freeformNotes || 'No biography notes yet.' }}
+                  </p>
+                </div>
+              </label>
+            </div>
+          }
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="action-btn secondary-btn"
+            (click)="showContactsPickerModal.set(false); showAddContactModal.set(true)"
+          >
+            <mat-icon>person_add</mat-icon>
+            <span>+ Create New Contact</span>
+          </button>
+          <button
+            type="button"
+            class="action-btn primary-sync-btn"
+            (click)="showContactsPickerModal.set(false)"
+          >
+            Done ({{ contactsService.selectedContacts().length }} Selected)
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: Add Custom Person to Gift Circle                             -->
+  <!-- ===================================================================== -->
+  @if (showAddContactModal()) {
+    <div class="modal-backdrop" (click)="showAddContactModal.set(false)">
+      <div
+        class="modal-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-labelledby="modal-add-contact-title"
+      >
+        <header class="modal-header">
+          <h2 id="modal-add-contact-title" class="display-font">Add Person to Gift Circle</h2>
+          <button
+            type="button"
+            class="icon-only-btn"
+            (click)="showAddContactModal.set(false)"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+
+        <div class="modal-body form-grid">
+          <div class="form-field">
+            <label for="new-contact-name">Full Name *</label>
+            <input
+              id="new-contact-name"
+              type="text"
+              placeholder="e.g. Aunt Clara"
+              [ngModel]="newContactForm().displayName"
+              (ngModelChange)="patchNewContactForm({ displayName: $event })"
+            />
+          </div>
+          <div class="form-field">
+            <label for="new-contact-rel">Relationship</label>
+            <select
+              id="new-contact-rel"
+              [ngModel]="newContactForm().relationship"
+              (ngModelChange)="patchNewContactForm({ relationship: $event })"
+            >
+              @for (rel of relationships; track rel) {
+                <option [value]="rel">{{ rel }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="new-contact-month">Birthday Month (1-12)</label>
+            <input
+              id="new-contact-month"
+              type="number"
+              min="1"
+              max="12"
+              [ngModel]="newContactForm().birthdayMonth"
+              (ngModelChange)="patchNewContactForm({ birthdayMonth: $event })"
+            />
+          </div>
+          <div class="form-field">
+            <label for="new-contact-day">Birthday Day (1-31)</label>
+            <input
+              id="new-contact-day"
+              type="number"
+              min="1"
+              max="31"
+              [ngModel]="newContactForm().birthdayDay"
+              (ngModelChange)="patchNewContactForm({ birthdayDay: $event })"
+            />
+          </div>
+          <div class="form-field full-width">
+            <label for="new-contact-notes">Personal Notes (Synced with Google Contacts biographies)</label>
+            <textarea
+              id="new-contact-notes"
+              rows="3"
+              placeholder="What do they love doing on weekends? Favorite authors, flavors, or hobbies?"
+              [ngModel]="newContactForm().freeformNotes"
+              (ngModelChange)="patchNewContactForm({ freeformNotes: $event })"
+            ></textarea>
+          </div>
+          <div class="form-field">
+            <label for="new-contact-likes">Likes (comma-separated)</label>
+            <input
+              id="new-contact-likes"
+              type="text"
+              placeholder="e.g. Pour-over coffee, Sci-fi books"
+              [ngModel]="newContactForm().likesCsv"
+              (ngModelChange)="patchNewContactForm({ likesCsv: $event })"
+            />
+          </div>
+          <div class="form-field">
+            <label for="new-contact-dislikes">Dislikes / Avoid (comma-separated)</label>
+            <input
+              id="new-contact-dislikes"
+              type="text"
+              placeholder="e.g. Strong perfumes"
+              [ngModel]="newContactForm().dislikesCsv"
+              (ngModelChange)="patchNewContactForm({ dislikesCsv: $event })"
+            />
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            class="action-btn secondary-btn"
+            (click)="showAddContactModal.set(false)"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            id="btn-submit-new-contact"
+            class="action-btn primary-sync-btn"
+            (click)="submitAddCustomContact()"
+          >
+            Add to Gift Circle
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: Universal Commerce Protocol (UCP) Inspector & Checkout       -->
+  <!-- ===================================================================== -->
+  @if (showUcpInspectorModal()) {
+    <div class="modal-backdrop" (click)="showUcpInspectorModal.set(false)">
+      <div
+        class="modal-dialog ucp-inspector-modal"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-labelledby="modal-ucp-title"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 id="modal-ucp-title" class="display-font">
+              Universal Commerce Protocol (UCP v2026-08-25) Inspector
+            </h2>
+            <p class="modal-subtitle">
+              Live protocol inspection for
+              <code class="mono">/.well-known/ucp</code> capability discovery,
+              <code class="mono">dev.ucp.shopping.catalog.search</code> product discovery, and
+              <code class="mono">dev.ucp.shopping.checkout</code> agentic buying.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="icon-only-btn"
+            (click)="showUcpInspectorModal.set(false)"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+
+        <div class="modal-toolbar">
+          <div class="picker-filter-pills">
+            <button
+              type="button"
+              id="ucp-tab-search"
+              class="facet-pill"
+              [class.active]="ucpInspectorTab() === 'search_request'"
+              (click)="ucpInspectorTab.set('search_request')"
+            >
+              1. Catalog Search (SearchCatalogRequest)
+            </button>
+            <button
+              type="button"
+              id="ucp-tab-wellknown"
+              class="facet-pill"
+              [class.active]="ucpInspectorTab() === 'well_known'"
+              (click)="ucpInspectorTab.set('well_known')"
+            >
+              2. Merchant Discovery (/.well-known/ucp)
+            </button>
+            <button
+              type="button"
+              id="ucp-tab-checkout"
+              class="facet-pill"
+              [class.active]="ucpInspectorTab() === 'checkout'"
+              (click)="ucpInspectorTab.set('checkout')"
+            >
+              3. Agentic Checkout (CreateCheckout)
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-body ucp-modal-body">
+          @switch (ucpInspectorTab()) {
+            @case ('search_request') {
+              <div class="ucp-explainer-box">
+                <strong>How UCP Product Discovery Works in Everyday Santa:</strong>
+                <p>
+                  Every time you edit {{ activeContact()?.displayName }}'s Google Contact notes, switch occasions
+                  (Birthday, Christmas, Mother's Day, Father's Day), or toggle a secondary filter, Everyday Santa
+                  builds a spec-compliant <code class="mono">SearchCatalogRequest</code> with structured
+                  <code class="mono">SearchFilters</code> (<code class="mono">categories</code>,
+                  <code class="mono">price.min/max</code>, and <code class="mono">additional_properties</code>).
+                </p>
+              </div>
+              <pre class="json-code-block mono">{{ activeUcpSearchRequestJson() }}</pre>
+            }
+            @case ('well_known') {
+              <div class="well-known-controls">
+                <select
+                  class="filter-select"
+                  aria-label="Select UCP Merchant to inspect"
+                  [ngModel]="inspectedMerchant()?.merchantId"
+                  (ngModelChange)="selectInspectedMerchantById($event)"
+                >
+                  @for (m of ucpCatalog.merchants(); track m.merchantId) {
+                    <option [value]="m.merchantId">
+                      {{ m.merchantName }} — {{ m.wellKnownUri }}
+                    </option>
+                  }
+                </select>
+
+                <div class="probe-merchant-inline">
+                  <input
+                    id="input-probe-ucp-domain"
+                    type="text"
+                    placeholder="Add merchant domain (e.g. patagonia.com)"
+                    [ngModel]="newMerchantDomainInput()"
+                    (ngModelChange)="newMerchantDomainInput.set($event)"
+                  />
+                  <button
+                    type="button"
+                    id="btn-probe-ucp-domain"
+                    class="action-btn ucp-btn"
+                    (click)="registerCustomUcpMerchant()"
+                  >
+                    Probe /.well-known/ucp
+                  </button>
+                </div>
+              </div>
+              @if (ucpCatalog.lastProbeResult()) {
+                <p class="probe-result-note">{{ ucpCatalog.lastProbeResult() }}</p>
+              }
+              <pre class="json-code-block mono">{{ activeWellKnownJson() }}</pre>
+            }
+            @case ('checkout') {
+              @if (activeCheckoutProduct(); as prod) {
+                <div class="checkout-summary-card">
+                  <div>
+                    <h4>{{ prod.offer.title }}</h4>
+                    <p>
+                      Merchant of Record: <strong>{{ prod.merchant.merchantName }}</strong>
+                      (<code class="mono">{{ prod.merchant.wellKnownUri }}</code>) &bull;
+                      Price: <strong>{{ prod.offer.formattedPrice }}</strong>
+                    </p>
+                  </div>
+                  <div class="checkout-cta-group">
+                    <button
+                      type="button"
+                      id="btn-execute-ucp-checkout"
+                      class="action-btn primary-sync-btn"
+                      (click)="completeSimulatedUcpCheckout()"
+                    >
+                      <mat-icon>verified</mat-icon>
+                      <span>Authorize UCP Checkout (Google Pay)</span>
+                    </button>
+                    <a
+                      class="action-btn secondary-btn"
+                      [href]="prod.offer.offerUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open Merchant Storefront
+                    </a>
+                  </div>
+                </div>
+                @if (checkoutCompletedMessage()) {
+                  <div class="checkout-success-banner">
+                    <mat-icon>task_alt</mat-icon>
+                    <span>{{ checkoutCompletedMessage() }}</span>
+                  </div>
+                }
+                <pre class="json-code-block mono">{{ activeCheckoutJson() }}</pre>
+              } @else {
+                <p>Click "UCP 1-Click Checkout" on any gift recommendation card to inspect its checkout payload.</p>
+              }
+            }
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 4: Google OAuth 2.0 (People API) & Gemini API Settings          -->
+  <!-- ===================================================================== -->
+  @if (showOAuthModal()) {
+    <div class="modal-backdrop" (click)="showOAuthModal.set(false)">
+      <div
+        class="modal-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-labelledby="modal-oauth-title"
+      >
+        <header class="modal-header">
+          <div>
+            <h2 id="modal-oauth-title" class="display-font">
+              Google Contacts OAuth 2.0 &amp; Gemini AI Configuration
+            </h2>
+            <p class="modal-subtitle">
+              100% static browser architecture — credentials stay in your browser's
+              <code class="mono">localStorage</code> and talk directly to
+              <code class="mono">people.googleapis.com</code> and
+              <code class="mono">generativelanguage.googleapis.com</code>.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="icon-only-btn"
+            (click)="showOAuthModal.set(false)"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+
+        <div class="modal-body form-grid">
+          <div class="form-field full-width">
+            <label for="oauth-client-id">Google Cloud OAuth 2.0 Client ID</label>
+            <input
+              id="oauth-client-id"
+              type="text"
+              placeholder="123456789-abc.apps.googleusercontent.com"
+              [ngModel]="oauthForm().clientId"
+              (ngModelChange)="patchOAuthForm({ clientId: $event })"
+            />
+          </div>
+          <div class="form-field full-width">
+            <label for="oauth-client-secret">Google Cloud OAuth 2.0 Client Secret</label>
+            <input
+              id="oauth-client-secret"
+              type="password"
+              placeholder="GOCSPX-..."
+              [ngModel]="oauthForm().clientSecret"
+              (ngModelChange)="patchOAuthForm({ clientSecret: $event })"
+            />
+          </div>
+          <div class="form-field">
+            <label for="oauth-redirect-uri">Authorized Redirect URI</label>
+            <input
+              id="oauth-redirect-uri"
+              type="text"
+              [ngModel]="oauthForm().redirectUri"
+              (ngModelChange)="patchOAuthForm({ redirectUri: $event })"
+            />
+          </div>
+          <div class="form-field">
+            <label for="oauth-login-hint">Google Account Login Hint (Optional)</label>
+            <input
+              id="oauth-login-hint"
+              type="email"
+              placeholder="you@gmail.com"
+              [ngModel]="oauthForm().loginHint"
+              (ngModelChange)="patchOAuthForm({ loginHint: $event })"
+            />
+          </div>
+          <div class="form-field full-width">
+            <label for="gemini-api-key">Gemini API Key (Optional — enables live Gemini 2.5 Flash brainstorm)</label>
+            <input
+              id="gemini-api-key"
+              type="password"
+              placeholder="AIzaSy..."
+              [ngModel]="oauthForm().geminiApiKey"
+              (ngModelChange)="patchOAuthForm({ geminiApiKey: $event })"
+            />
+          </div>
+
+          <div class="oauth-instructions full-width">
+            <strong>Quick Setup for Live Google Contacts Bidirectional Sync:</strong>
+            <ol>
+              <li>In Google Cloud Console, enable the <strong>Google People API</strong>.</li>
+              <li>
+                Add scope <code class="mono">https://www.googleapis.com/auth/contacts</code> (required for both reading
+                <code class="mono">birthdays/biographies</code> and writing notes back via
+                <code class="mono">people.updateContact</code>).
+              </li>
+              <li>
+                Set your OAuth Consent Screen to <strong>In Production</strong> so your
+                <code class="mono">refresh_token</code> never expires after 7 days.
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button
+            type="button"
+            id="btn-save-oauth-config"
+            class="action-btn secondary-btn"
+            (click)="saveOAuthAndGeminiSettings(); showOAuthModal.set(false)"
+          >
+            Save Settings
+          </button>
+          <button
+            type="button"
+            id="btn-authorize-google-contacts"
+            class="action-btn primary-sync-btn"
+            (click)="startGoogleOAuthFlow()"
+          >
+            <mat-icon>login</mat-icon>
+            <span>Authorize &amp; Connect Google Contacts</span>
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 5: Saved Gift Shortlist                                         -->
+  <!-- ===================================================================== -->
+  @if (showSavedShortlistModal()) {
+    <div class="modal-backdrop" (click)="showSavedShortlistModal.set(false)">
+      <div
+        class="modal-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-labelledby="modal-shortlist-title"
+      >
+        <header class="modal-header">
+          <h2 id="modal-shortlist-title" class="display-font">
+            Saved Gift Shortlist ({{ aiEngine.savedGifts().length }})
+          </h2>
+          <button
+            type="button"
+            class="icon-only-btn"
+            (click)="showSavedShortlistModal.set(false)"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+
+        <div class="modal-body picker-list">
+          @for (item of aiEngine.savedGifts(); track item.id) {
+            <div class="shortlist-row">
+              <label class="picker-checkbox-label">
+                <input
+                  type="checkbox"
+                  [checked]="item.purchased"
+                  (change)="aiEngine.togglePurchasedStatus(item.id)"
+                />
+                <div class="picker-contact-details">
+                  <div class="picker-row-top">
+                    <strong [class.purchased-strike]="item.purchased">{{ item.productTitle }}</strong>
+                    <span class="relationship-chip">{{ item.contactName }}</span>
+                    <span class="bday-chip">{{ item.occasionId }}</span>
+                    <strong>{{ item.formattedPrice }}</strong>
+                  </div>
+                  <p class="picker-note-preview">
+                    UCP Merchant: {{ item.merchantName }} &bull;
+                    <a [href]="item.offerUrl" target="_blank" rel="noopener noreferrer">Open Offer</a>
+                  </p>
+                </div>
+              </label>
+            </div>
+          } @empty {
+            <p class="empty-shortlist-msg">
+              No saved gifts yet. Click "Save Idea" on any recommendation card to build your holiday shopping checklist!
+            </p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
