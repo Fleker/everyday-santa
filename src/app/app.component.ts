@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   ContactRelationship,
+  GeminiModelId,
   GiftOccasionId,
   GiftRecommendation,
   GiftSortOption,
@@ -126,12 +127,14 @@ export class AppComponent implements OnInit {
     redirectUri: string;
     loginHint: string;
     geminiApiKey: string;
+    geminiModel: GeminiModelId;
   }>({
     clientId: '',
     clientSecret: '',
     redirectUri: '',
     loginHint: '',
     geminiApiKey: '',
+    geminiModel: 'gemini-4-carbon',
   });
 
   readonly showUcpInspectorModal = signal<boolean>(false);
@@ -295,6 +298,7 @@ export class AppComponent implements OnInit {
       redirectUri: cfg.redirectUri,
       loginHint: '',
       geminiApiKey: cfg.geminiApiKey || '',
+      geminiModel: cfg.geminiModel || 'gemini-4-carbon',
     });
     this.inspectedMerchant.set(this.ucpCatalog.merchants()[0] || null);
 
@@ -558,10 +562,12 @@ export class AppComponent implements OnInit {
   async triggerAiBrainstorm(): Promise<void> {
     const contact = this.activeContact();
     if (!contact) return;
+    const cfg = this.contactsService.oauthConfig();
     await this.aiEngine.generateAiGiftBrainstorm(
       contact,
       this.activeOccasionId(),
-      this.contactsService.oauthConfig().geminiApiKey
+      cfg.geminiApiKey,
+      cfg.geminiModel || 'gemini-4-carbon'
     );
   }
 
@@ -662,6 +668,7 @@ export class AppComponent implements OnInit {
       redirectUri: string;
       loginHint: string;
       geminiApiKey: string;
+      geminiModel: GeminiModelId;
     }>
   ): void {
     this.oauthForm.update((f) => ({ ...f, ...patch }));
@@ -719,6 +726,7 @@ export class AppComponent implements OnInit {
       clientSecret: f.clientSecret,
       redirectUri: f.redirectUri,
       geminiApiKey: f.geminiApiKey,
+      geminiModel: f.geminiModel,
     });
   }
 

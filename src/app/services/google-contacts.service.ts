@@ -59,6 +59,7 @@ export class GoogleContactsService {
       clientSecret: config.clientSecret.trim(),
       redirectUri: config.redirectUri.trim() || defaultRedirect,
       geminiApiKey: config.geminiApiKey?.trim() || '',
+      geminiModel: config.geminiModel || 'gemini-4-carbon',
     };
     this.oauthConfig.set(normalized);
     try {
@@ -1202,6 +1203,7 @@ export class GoogleContactsService {
       clientSecret: '',
       redirectUri: defaultRedirect,
       geminiApiKey: '',
+      geminiModel: 'gemini-4-carbon',
     };
   }
 

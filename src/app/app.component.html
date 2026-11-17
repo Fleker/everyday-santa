@@ -1515,8 +1515,8 @@
               (ngModelChange)="patchOAuthForm({ loginHint: $event })"
             />
           </div>
-          <div class="form-field full-width">
-            <label for="gemini-api-key">Gemini API Key (Optional — enables live Gemini 2.5 Flash brainstorm)</label>
+          <div class="form-field">
+            <label for="gemini-api-key">Gemini API Key (Optional — enables live Gemini 4 brainstorm)</label>
             <input
               id="gemini-api-key"
               type="password"
@@ -1524,6 +1524,19 @@
               [ngModel]="oauthForm().geminiApiKey"
               (ngModelChange)="patchOAuthForm({ geminiApiKey: $event })"
             />
+          </div>
+          <div class="form-field">
+            <label for="gemini-model-select">Gemini 4 Model</label>
+            <select
+              id="gemini-model-select"
+              [ngModel]="oauthForm().geminiModel"
+              (ngModelChange)="patchOAuthForm({ geminiModel: $event })"
+            >
+              <option value="gemini-4-carbon">Gemini 4 Carbon (gemini-4-carbon)</option>
+              <option value="gemini-4-argon">Gemini 4 Argon (gemini-4-argon)</option>
+              <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (gemini-4-hydrogen)</option>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (gemini-3.8-flash)</option>
+            </select>
           </div>
 
           <div class="oauth-instructions full-width">

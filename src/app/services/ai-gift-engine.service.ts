@@ -276,15 +276,17 @@ export class AiGiftEngineService {
   }
 
   /**
-   * Calls Gemini API (`gemini-2.5-flash`) directly from the browser if an API key is provided,
-   * or synthesizes structured AI gift concepts locally from the contact's synced notes.
+   * Calls Gemini 4 (`gemini-4-carbon` / `gemini-4-argon` / `gemini-4-hydrogen`) directly from the browser
+   * if an API key is provided, or synthesizes structured AI gift concepts locally from the contact's synced notes.
    */
   async generateAiGiftBrainstorm(
     contact: SantaContact,
     occasionId: GiftOccasionId,
-    geminiApiKey?: string
+    geminiApiKey?: string,
+    geminiModel: string = 'gemini-4-carbon'
   ): Promise<AiCustomPromptIdea[]> {
     const key = `${contact.resourceName}::${occasionId}`;
+    const activeModel = geminiModel.trim() || 'gemini-4-carbon';
     this.isGeneratingGemini.set(true);
     this.aiStatusMessage.set(null);
 
@@ -300,7 +302,7 @@ Target Budget: $${contact.giftProfile.targetBudget.min}-$${contact.giftProfile.t
 Return JSON array of objects with fields: title, category, estimatedPrice, whyItFits, ucpSearchQuery.`;
 
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiApiKey.trim())}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiApiKey.trim())}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -321,7 +323,7 @@ Return JSON array of objects with fields: title, category, estimatedPrice, whyIt
           if (Array.isArray(parsed) && parsed.length > 0) {
             this.customAiIdeas.update((prev) => ({ ...prev, [key]: parsed }));
             this.aiStatusMessage.set(
-              `Generated ${parsed.length} live Gemini 2.5 Flash gift concepts for ${contact.givenName}.`
+              `Generated ${parsed.length} live ${activeModel} gift concepts for ${contact.givenName}.`
             );
             return parsed;
           }

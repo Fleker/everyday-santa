@@ -31,6 +31,7 @@ describe('Everyday Santa — AppComponent & Services', () => {
     expect(contactsService.contacts().length).toBeGreaterThanOrEqual(8);
     expect(contactsService.selectedContacts().length).toBe(6);
     expect(app.activeContact()?.displayName).toBe('Linda Felker');
+    expect(app.oauthForm().geminiModel).toBe('gemini-4-carbon');
   });
 
   it('should round-trip bidirectional Google Contacts notes (serializeContactNotes <-> parseContactNotes)', () => {

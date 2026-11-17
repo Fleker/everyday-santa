@@ -89,11 +89,18 @@ export interface SantaContact {
   syncError?: string;
 }
 
+export type GeminiModelId =
+  | 'gemini-4-carbon'
+  | 'gemini-4-argon'
+  | 'gemini-4-hydrogen'
+  | 'gemini-3.8-flash';
+
 export interface GoogleOAuthConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
   geminiApiKey?: string;
+  geminiModel?: GeminiModelId;
 }
 
 export interface ConnectedGoogleAccount {

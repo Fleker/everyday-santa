@@ -12,7 +12,7 @@ Everyday Santa is a 100% static Angular 20 + Angular Material web application (`
 - **`src/app/services/ucp-catalog.service.ts`**:
   - Implements Universal Commerce Protocol (`ucp.dev` v`2026-08-25`) `/.well-known/ucp` capability discovery, `SearchFilters` builder, `searchCatalog`, and `buildUcpCheckoutPayload`.
 - **`src/app/services/ai-gift-engine.service.ts`**:
-  - Synthesizes UCP `SearchCatalogRequest` queries from contact notes + occasion, scores UCP catalog products against contact `likes`, `dislikes`, `pastGifts`, `favoriteBrands`, `relationship`, and `targetBudget`, and integrates with `gemini-2.5-flash` (`generativelanguage.googleapis.com`).
+  - Synthesizes UCP `SearchCatalogRequest` queries from contact notes + occasion, scores UCP catalog products against contact `likes`, `dislikes`, `pastGifts`, `favoriteBrands`, `relationship`, and `targetBudget`, and integrates with Gemini 4 (`gemini-4-carbon`, `gemini-4-argon`, `gemini-4-hydrogen`, `gemini-3.8-flash` via `generativelanguage.googleapis.com`).
 
 ## 2. Testing & Verification
 
